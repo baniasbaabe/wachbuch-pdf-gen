@@ -19,8 +19,19 @@ template = env.get_template('report_template.html')
 
 @st.cache_data(ttl="30min")
 def load_google_sheets_data(sheet_name: str, credentials_file: str = None) -> pd.DataFrame:
-    creds = os.getenv("CREDENTIALS")
-    gc = gspread.service_account_from_dict(literal_eval(creds))
+    creds = {
+        "type": os.getenv("TYPE"),
+        "project_id": os.getenv("PROJECT_ID"),
+        "private_key_id": os.getenv("PRIVATE_KEY_ID"),
+        "private_key": os.getenv("PRIVATE_KEY"),
+        "client_email": os.getenv("CLIENT_EMAIL"),
+        "client_id": os.getenv("CLIENT_ID"),
+        "auth_uri": os.getenv("AUTH_URI"),
+        "token_uri": os.getenv("TOKEN_URI"),
+        "auth_provider_x509_cert_url": os.getenv("AUTH_PROVIDER_X509_CERT_URL"),
+        "client_x509_cert_url": os.getenv("CLIENT_X509_CERT_URL")
+    }
+    gc = gspread.service_account_from_dict(creds)
     sh = gc.open(sheet_name).get_worksheet(0)
     df = pd.DataFrame(sh.get_all_records())
     df["Checkpoint-ID"] = df["Checkpoint-ID"].str.strip()
