@@ -126,10 +126,10 @@
     <!-- Replace with actual logo path -->
 
     <h1>{{ title }}</h1>
-    <div class="date">Generated on: {{ date }}</div>
-
+    <div class="date"><b>Erstellt am:</b> {{ date }}</div>
+    <div class="checkpoints"><b>Objekt:</b> {{ custom_input }}</div>
     <div class="checkpoints">
-      <h2>Selected Checkpoints:</h2>
+      <h2><b>Checkpoints:</b></h2>
       <ul>
         {% for checkpoint in checkpoints %}
         <li>{{ checkpoint }}</li>
