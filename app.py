@@ -42,9 +42,9 @@ def load_google_sheets_data(sheet_name: str, credentials_file: str = None) -> pd
 @st.cache_data(ttl="30min")
 def load_second_sheet_data(sheet_name: str, credentials_file: str = None) -> pd.DataFrame:
     # Define custom header for Sheet1
-    custom_header = [
-        "Checkpoint-ID", "Drop_1", "Bemerkung", "Ort", "Geräte-ID", "Gerät", "Drop_2", "Sendezeitstempel",
-    ]
+    # custom_header = [
+    #     "Checkpoint-ID", "Drop_1", "Bemerkung", "Ort", "Geräte-ID", "Gerät", "Drop_2", "Sendezeitstempel",
+    # ]
     
     creds = {
         "type": os.getenv("TYPE"),
@@ -63,7 +63,7 @@ def load_second_sheet_data(sheet_name: str, credentials_file: str = None) -> pd.
     sh = gc.open(sheet_name).get_worksheet(1)
     
     # Read the sheet data without a header and assign the custom header
-    df = pd.DataFrame(sh.get_all_values(), columns=custom_header)  # Read without header
+    df = pd.DataFrame(sh.get_all_records())  # Read without header
     
     # Clean up the data (optional: strip whitespace from all column names)
     df.columns = df.columns.str.strip()
@@ -153,12 +153,12 @@ with tab2:
     # Inputs for Sheet1
     months = st.multiselect("Select Months", options=range(1, 13), format_func=lambda x: f"{x:02d}", key="months_tab2")
     year = st.selectbox("Select Year", options=sorted(data_sheet1["Sendezeitstempel"].dt.year.unique()), key="year_tab2")
-    selected_checkpoints = st.multiselect("Select Checkpoints", options=data_sheet1["Checkpoint-ID"].unique(), key="checkpoints_tab2")
+    selected_checkpoints = st.multiselect("Select Checkpoints", options=data_sheet1["Checkpoint"].unique(), key="checkpoints_tab2")
     custom_input = st.text_input("Custom Input", value="", key="custom_input_tab2")
     # Filter data for Sheet1
     filtered_data_sheet1 = data_sheet1[ 
         (data_sheet1["Sendezeitstempel"].dt.year == year) & 
-        (data_sheet1["Checkpoint-ID"].isin(selected_checkpoints))
+        (data_sheet1["Checkpoint"].isin(selected_checkpoints))
     ]
     # Drop columns where "Drop" is in the column name
     filtered_data_sheet1 = filtered_data_sheet1.drop(columns=[col for col in filtered_data_sheet1.columns if "Drop" in col])
