@@ -19,7 +19,7 @@ SHEET_NAME = 'Esslingen'  # Name of the Google Sheets document
 env = Environment(loader=FileSystemLoader('.'))
 template = env.get_template('report_template.html')
 
-@st.cache_data(ttl="30min")
+@st.cache_data(ttl="1min")
 def load_google_sheets_data(sheet_name: str, credentials_file: str = None) -> pd.DataFrame:
     creds = {
         "type": os.getenv("TYPE"),
@@ -39,7 +39,7 @@ def load_google_sheets_data(sheet_name: str, credentials_file: str = None) -> pd
     df["Checkpoint-ID"] = df["Checkpoint-ID"].str.strip()
     return df
 
-@st.cache_data(ttl="30min")
+@st.cache_data(ttl="3min")
 def load_second_sheet_data(sheet_name: str, credentials_file: str = None) -> pd.DataFrame:
     # Define custom header for Sheet1
     # custom_header = [
