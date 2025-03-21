@@ -37,6 +37,8 @@ def load_google_sheets_data(sheet_name: str, credentials_file: str = None) -> pd
     sh = gc.open(sheet_name).get_worksheet(0)
     df = pd.DataFrame(sh.get_all_records())
     df["Checkpoint-ID"] = df["Checkpoint-ID"].str.strip()
+    df["Checkpoint-ID"] = df["Checkpoint-ID"].replace({"nan":None, "": None})
+    df = df.dropna(subset=["Checkpoint-ID"])
     return df
 
 @st.cache_data(ttl="3min")
