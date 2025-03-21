@@ -110,7 +110,7 @@ with tab1:
         html_content = template.render(
             title=f"Checkpoint Report - {int(year)}/{month:02d}",
             date=dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            checkpoints=selected_checkpoints,
+            checkpoints=", ".join(selected_checkpoints),
             dataframe=df,
             custom_input=custom_input
         )
