@@ -18,10 +18,8 @@
 
       body {
         font-family: Arial, sans-serif;
-        justify-content: center;
-        align-items: center;
-        margin: 15px;
-        font-size: 7pt;
+        margin: 0px;
+        font-size: 6pt;
         line-height: 1.3;
         position: relative; /* Ensure the body is the reference for absolute positioning */
       }
@@ -29,11 +27,13 @@
       /* Logo style */
       .logo {
         position: absolute;
-        top: 10px;
+        top: 0px;
         right: 0;
-        width: 115px;
+        width: 130px;
         height: auto;
-        margin-left: 10px;
+        margin-left: auto;
+        float: right;
+        clear: both;
       }
 
       h1 {
@@ -77,14 +77,15 @@
       }
 
       .table-container {
-        overflow-x: auto;
-        margin-top: 15px;
+        width: 100%;
+        overflow-x: visible;
       }
 
       table {
         border-collapse: collapse;
-        font-size: 6pt;
-        width: 90%; /* Use full table width */
+        table-layout: fixed;
+        font-size: 5pt;
+        width: 100%; /* Use full table width */
       }
 
       table,
@@ -134,7 +135,12 @@
   </head>
   <body>
     <!-- Logo inserted at the top-right -->
-    <img src="sg-logo.png" alt="Logo" class="logo" />
+    <img
+      src="data:image/png;base64,{{ logo_base64 }}"
+      alt="Logo"
+      class="logo"
+    />
+
     <!-- Replace with actual logo path -->
 
     <h1>{{ title }}</h1>
@@ -142,10 +148,8 @@
     <div class="contact">
       <b
         >SecureGuard Sicherheitsgruppe | Kontakt:
-        <a href="mailto:wachbuch@secureguard-sg.de"
-          >wachbuch@secureguard-sg.de</a
-        >
-        | 24/7 Alarmzentrale: +4971182654563</b
+        wachbuch@secureguard-sg.de | 24/7 Alarmzentrale:
+        +4971182654563</b
       >
     </div>
     {% if custom_input %}
