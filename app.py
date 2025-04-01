@@ -67,6 +67,32 @@ def load_second_sheet_data(sheet_name: str, credentials_file: str = None) -> pd.
     
     return df
 
+@st.cache_data(ttl="15min")
+def load_third_sheet_data(sheet_name: str, credentials_file: str = None) -> pd.DataFrame:
+    creds = {
+        "type": os.getenv("TYPE"),
+        "project_id": os.getenv("PROJECT_ID"),
+        "private_key_id": os.getenv("PRIVATE_KEY_ID"),
+        "private_key": os.getenv("PRIVATE_KEY"),
+        "client_email": os.getenv("CLIENT_EMAIL"),
+        "client_id": os.getenv("CLIENT_ID"),
+        "auth_uri": os.getenv("AUTH_URI"),
+        "token_uri": os.getenv("TOKEN_URI"),
+        "auth_provider_x509_cert_url": os.getenv("AUTH_PROVIDER_X509_CERT_URL"),
+        "client_x509_cert_url": os.getenv("CLIENT_X509_CERT_URL")
+    }
+    
+    gc = gspread.service_account_from_dict(creds)
+    sh = gc.open(sheet_name).get_worksheet(2)  # Index 2 is the third sheet
+    
+    df = pd.DataFrame(sh.get_all_records())
+    
+    # Clean up the data
+    df.columns = df.columns.str.strip()
+    
+    return df
+
+
 def convert_to_datetime(df: pd.DataFrame, column_name: str, date_format: str) -> pd.DataFrame:
     df[column_name] = pd.to_datetime(df[column_name], format=date_format, errors='coerce')
     df[column_name] = pd.to_datetime(df[column_name].dt.strftime('%d.%m.%Y %H:%M:%S'), errors='coerce')
@@ -132,9 +158,14 @@ data_sheet1 = load_second_sheet_data(SHEET_NAME, CREDENTIALS_FILE)
 
 data_sheet0 = convert_to_datetime(data_sheet0, 'Sendezeitstempel', '%d.%m.%Y %H:%M:%S')
 data_sheet1 = convert_to_datetime(data_sheet1, 'Sendezeitstempel', '%Y-%m-%d %H:%M:%S')
+# Load data for all three sheets
+data_sheet2 = load_third_sheet_data(SHEET_NAME, CREDENTIALS_FILE)
+data_sheet2 = convert_to_datetime(data_sheet2, 'Sendezeitstempel', '%Y-%m-%d %H:%M:%S')
 
 # Tabs for the two sheets
-tab1, tab2 = st.tabs(["Sheet0 Report", "Sheet1 Report"])
+# Change this line
+tab1, tab2, tab3 = st.tabs(["Sheet0 Report", "Sheet1 Report", "Sheet2 Report"])
+
 
 with tab1:
     st.header("Sheet0 Report")
@@ -220,3 +251,50 @@ with tab2:
                 )
             else:
                 st.warning("No data available for the selected months in Sheet1.")
+
+with tab3:
+    st.header("Sheet2 Report")
+    
+    # Create a form for Sheet2
+    with st.form(key="sheet2_form"):
+        months = st.multiselect("Select Months", options=range(1, 13), format_func=lambda x: f"{x:02d}")
+        year = st.selectbox("Select Year", options=sorted(data_sheet2["Sendezeitstempel"].dt.year.unique()))
+        
+        # Use the appropriate checkpoint column name for Sheet2
+        checkpoint_column = "Checkpoint"  # Change this if different in Sheet2
+        selected_checkpoints = st.multiselect("Select Checkpoints", options=data_sheet2[checkpoint_column].unique())
+        custom_input = st.text_input("Custom Input", value="")
+        
+        submit_button = st.form_submit_button(label="Generate PDFs for Selected Months")
+        
+    # Process form submission
+    if submit_button:
+        filtered_data_sheet2 = data_sheet2[ 
+            (data_sheet2["Sendezeitstempel"].dt.year == year) & 
+            (data_sheet2[checkpoint_column].isin(selected_checkpoints))
+        ]
+        
+        # Drop columns where "Drop" is in the column name (if needed)
+        filtered_data_sheet2 = filtered_data_sheet2.drop(columns=[col for col in filtered_data_sheet2.columns if "Drop" in col])
+        
+        if filtered_data_sheet2.empty:
+            st.warning("No data to generate PDFs for Sheet2.")
+        else:
+            pdfs = []
+            for month in months:
+                # Filter data for the specific month
+                month_data = filtered_data_sheet2[filtered_data_sheet2["Sendezeitstempel"].dt.month == month]
+                if not month_data.empty:
+                    pdf_data = generate_pdf(month_data, month, year, selected_checkpoints, custom_input)
+                    pdfs.append((month, pdf_data))
+
+            if pdfs:
+                zip_data = generate_zip(pdfs, year)
+                st.download_button(
+                    label="Download All PDFs as ZIP",
+                    data=zip_data,
+                    file_name=f"checkpoint_reports_{year}.zip",
+                    mime="application/zip"
+                )
+            else:
+                st.warning("No data available for the selected months in Sheet2.")
