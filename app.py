@@ -2,14 +2,15 @@ import gspread
 import pandas as pd
 import datetime as dt
 import streamlit as st
-import time
 from io import BytesIO
-from jinja2 import Environment, FileSystemLoader
-import pdfkit
 import zipfile
 import os
 from dotenv import load_dotenv
-from ast import literal_eval
+import base64
+from weasyprint import HTML
+import base64
+import datetime as dt
+from jinja2 import Environment, FileSystemLoader
 
 load_dotenv()
 CREDENTIALS_FILE = 'credentials.json'
@@ -98,24 +99,6 @@ def convert_to_datetime(df: pd.DataFrame, column_name: str, date_format: str) ->
     df[column_name] = pd.to_datetime(df[column_name].dt.strftime('%d.%m.%Y %H:%M:%S'), errors='coerce')
     return df
 
-def html_to_pdf(html_content):
-    # Use pdfkit to generate the PDF from the HTML content
-    # Make sure wkhtmltopdf is installed and available in your PATH
-    options = {
-#         'margin-bottom': '0.75in',
-#    'footer-center': '[page]',  # Adjust spacing
-        "enable-local-file-access": ""  # Ensure local assets are accessible
-    }
-    pdf_data = pdfkit.from_string(html_content, False, options=options)
-    return pdf_data
-
-import base64
-
-from weasyprint import HTML
-import base64
-import datetime as dt
-from jinja2 import Environment, FileSystemLoader
-
 env = Environment(loader=FileSystemLoader('.'))
 template = env.get_template('report_template.html')
 
@@ -139,8 +122,6 @@ def generate_pdf(df, month, year, selected_checkpoints, custom_input):
     return HTML(string=html_content).write_pdf()
 
 
-
-
 def generate_zip(pdfs, year):
     zip_buffer = BytesIO()
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
@@ -161,10 +142,51 @@ data_sheet1 = convert_to_datetime(data_sheet1, 'Sendezeitstempel', '%Y-%m-%d %H:
 # Load data for all three sheets
 data_sheet2 = load_third_sheet_data(SHEET_NAME, CREDENTIALS_FILE)
 data_sheet2 = convert_to_datetime(data_sheet2, 'Sendezeitstempel', '%Y-%m-%d %H:%M:%S')
-
+print(data_sheet1.info())
+print(data_sheet2.info())
 # Tabs for the two sheets
 # Change this line
 tab1, tab2, tab3 = st.tabs(["Sheet0 Report", "Sheet1 Report", "Sheet2 Report"])
+
+import streamlit as st
+import time
+import concurrent.futures
+
+def generate_pdf(df, month, year, selected_checkpoints, custom_input):
+    logo_base64 = encode_image_to_base64("sg-logo.png")
+
+    html_content = template.render(
+        title=f"Checkpoint Report - {int(year)}/{month:02d}",
+        date=dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        checkpoints=", ".join(selected_checkpoints),
+        dataframe=df,
+        custom_input=custom_input,
+        logo_base64=logo_base64
+    )
+
+    return HTML(string=html_content).write_pdf()
+
+@st.cache_resource
+def process_pdfs(months, year, filtered_data, selected_checkpoints, custom_input):
+    pdfs = []
+    total_months = len(months)
+    progress_bar = st.progress(0)
+
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = {executor.submit(generate_pdf, filtered_data[filtered_data["Sendezeitstempel"].dt.month == month], month, year, selected_checkpoints, custom_input): month for month in months}
+
+        for i, future in enumerate(concurrent.futures.as_completed(futures)):
+            month = futures[future]
+            try:
+                pdf_data = future.result()
+                pdfs.append((month, pdf_data))
+            except Exception as e:
+                st.error(f"Error generating PDF for month {month}: {e}")
+
+            progress = (i + 1) / total_months
+            progress_bar.progress(progress)
+
+    return pdfs
 
 
 with tab1:
@@ -210,36 +232,28 @@ with tab1:
 
 with tab2:
     st.header("Sheet1 Report (Bewachung)")
-    
-    # Create a form for Sheet1
+
     with st.form(key="sheet1_form"):
         months = st.multiselect("Select Months", options=range(1, 13), format_func=lambda x: f"{x:02d}")
         year = st.selectbox("Select Year", options=sorted(data_sheet1["Sendezeitstempel"].dt.year.unique()))
         selected_checkpoints = st.multiselect("Select Checkpoints", options=data_sheet1["Checkpoint"].unique())
         custom_input = st.text_input("Custom Input", value="")
-        
+
         submit_button = st.form_submit_button(label="Generate PDFs for Selected Months")
-        
-    # Process form submission
+
     if submit_button:
-        filtered_data_sheet1 = data_sheet1[ 
-            (data_sheet1["Sendezeitstempel"].dt.year == year) & 
+        filtered_data_sheet1 = data_sheet1[
+            (data_sheet1["Sendezeitstempel"].dt.year == year) &
             (data_sheet1["Checkpoint"].isin(selected_checkpoints))
         ]
-        
-        # Drop columns where "Drop" is in the column name
+
         filtered_data_sheet1 = filtered_data_sheet1.drop(columns=[col for col in filtered_data_sheet1.columns if "Drop" in col])
-        
+
         if filtered_data_sheet1.empty:
             st.warning("No data to generate PDFs for Sheet1.")
         else:
-            pdfs = []
-            for month in months:
-                # Filter data for the specific month
-                month_data = filtered_data_sheet1[filtered_data_sheet1["Sendezeitstempel"].dt.month == month]
-                if not month_data.empty:
-                    pdf_data = generate_pdf(month_data, month, year, selected_checkpoints, custom_input)
-                    pdfs.append((month, pdf_data))
+            # Call the process_pdfs function
+            pdfs = process_pdfs(months, year, filtered_data_sheet1, selected_checkpoints, custom_input)
 
             if pdfs:
                 zip_data = generate_zip(pdfs, year)
@@ -251,6 +265,7 @@ with tab2:
                 )
             else:
                 st.warning("No data available for the selected months in Sheet1.")
+
 
 with tab3:
     st.header("Sheet2 Report")
