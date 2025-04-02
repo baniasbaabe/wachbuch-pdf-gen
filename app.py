@@ -11,7 +11,7 @@ from weasyprint import HTML
 import base64
 import datetime as dt
 from jinja2 import Environment, FileSystemLoader
-
+import time
 load_dotenv()
 CREDENTIALS_FILE = 'credentials.json'
 
@@ -146,125 +146,112 @@ print(data_sheet1.info())
 print(data_sheet2.info())
 # Tabs for the two sheets
 # Change this line
+
+
 tab1, tab2, tab3 = st.tabs(["Sheet0 Report", "Sheet1 Report", "Sheet2 Report"])
-
-import streamlit as st
-import time
-import concurrent.futures
-
-def generate_pdf(df, month, year, selected_checkpoints, custom_input):
-    logo_base64 = encode_image_to_base64("sg-logo.png")
-
-    html_content = template.render(
-        title=f"Checkpoint Report - {int(year)}/{month:02d}",
-        date=dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        checkpoints=", ".join(selected_checkpoints),
-        dataframe=df,
-        custom_input=custom_input,
-        logo_base64=logo_base64
-    )
-
-    return HTML(string=html_content).write_pdf()
-
-@st.cache_resource
-def process_pdfs(months, year, filtered_data, selected_checkpoints, custom_input):
-    pdfs = []
-    total_months = len(months)
-    progress_bar = st.progress(0)
-
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = {executor.submit(generate_pdf, filtered_data[filtered_data["Sendezeitstempel"].dt.month == month], month, year, selected_checkpoints, custom_input): month for month in months}
-
-        for i, future in enumerate(concurrent.futures.as_completed(futures)):
-            month = futures[future]
-            try:
-                pdf_data = future.result()
-                pdfs.append((month, pdf_data))
-            except Exception as e:
-                st.error(f"Error generating PDF for month {month}: {e}")
-
-            progress = (i + 1) / total_months
-            progress_bar.progress(progress)
-
-    return pdfs
-
+if st.session_state.get('trigger_rerun', False):
+    st.session_state.trigger_rerun = False
+    st.rerun()
 
 with tab1:
     st.header("Sheet0 Report")
-    
-    # # Create a form for Sheet0
-    # with st.form(key="sheet0_form"):
-    #     months = st.multiselect("Select Months", options=range(1, 13), format_func=lambda x: f"{x:02d}")
-    #     year = st.selectbox("Select Year", options=sorted(data_sheet0["Sendezeitstempel"].dt.year.unique()))
-    #     selected_checkpoints = st.multiselect("Select Checkpoints", options=data_sheet0["Checkpoint-ID"].unique())
-    #     custom_input = st.text_input("Custom Input", value="")
-        
-    #     submit_button = st.form_submit_button(label="Generate PDFs for Selected Months")
-        
-    # # Process form submission
-    # if submit_button:
-    #     filtered_data_sheet0 = data_sheet0[ 
-    #         (data_sheet0["Sendezeitstempel"].dt.year == year) & 
-    #         (data_sheet0["Checkpoint-ID"].isin(selected_checkpoints))
-    #     ]
-        
-    #     if filtered_data_sheet0.empty:
-    #         st.warning("No data to generate PDFs for Sheet0.")
-    #     else:
-    #         pdfs = []
-    #         for month in months:
-    #             # Filter data for the specific month
-    #             month_data = filtered_data_sheet0[filtered_data_sheet0["Sendezeitstempel"].dt.month == month]
-    #             if not month_data.empty:
-    #                 pdf_data = generate_pdf(month_data, month, year, selected_checkpoints, custom_input)
-    #                 pdfs.append((month, pdf_data))
 
-    #         if pdfs:
-    #             zip_data = generate_zip(pdfs, year)
-    #             st.download_button(
-    #                 label="Download All PDFs as ZIP",
-    #                 data=zip_data,
-    #                 file_name=f"checkpoint_reports_{year}.zip",
-    #                 mime="application/zip"
-    #             )
-    #         else:
-    #             st.warning("No data available for the selected months in Sheet0.")
+# Add these at the top with other imports
+import threading
+from streamlit.runtime.scriptrunner import add_script_run_ctx
 
+# Initialize session state variables (place near top before tabs)
+if 'processing' not in st.session_state:
+    st.session_state.processing = False
+if 'progress' not in st.session_state:
+    st.session_state.progress = 0
+if 'pdfs' not in st.session_state:
+    st.session_state.pdfs = None
+
+# Add this function definition with your other functions
+from streamlit.runtime.scriptrunner import RerunData, RerunException
+
+# Modified generate_pdfs_background function
+def generate_pdfs_background(filtered_data, months, year, selected_checkpoints, custom_input):
+    try:
+        pdfs = []
+        total_months = len(months)
+        
+        for i, month in enumerate(months):
+            st.session_state.progress = (i / total_months) * 100
+            month_data = filtered_data[filtered_data["Sendezeitstempel"].dt.month == month]
+            if not month_data.empty:
+                pdf_data = generate_pdf(month_data, month, year, selected_checkpoints, custom_input)
+                pdfs.append((month, pdf_data))
+        
+        # Update session state with completed data
+        st.session_state.pdfs = pdfs
+        st.session_state.processing = False
+        st.session_state.progress = 100
+        st.session_state.trigger_rerun = True
+        # Remove the st.rerun() call from here - it's unreliable in threads
+    except Exception as e:
+        st.session_state.processing = False
+        st.session_state.trigger_rerun = True
+
+
+# Modified Sheet1 Report tab (tab2)
 with tab2:
     st.header("Sheet1 Report (Bewachung)")
-
+    
+    # Create a form for Sheet1
     with st.form(key="sheet1_form"):
         months = st.multiselect("Select Months", options=range(1, 13), format_func=lambda x: f"{x:02d}")
         year = st.selectbox("Select Year", options=sorted(data_sheet1["Sendezeitstempel"].dt.year.unique()))
         selected_checkpoints = st.multiselect("Select Checkpoints", options=data_sheet1["Checkpoint"].unique())
         custom_input = st.text_input("Custom Input", value="")
-
+        
         submit_button = st.form_submit_button(label="Generate PDFs for Selected Months")
 
+    # Process form submission
     if submit_button:
-        filtered_data_sheet1 = data_sheet1[
-            (data_sheet1["Sendezeitstempel"].dt.year == year) &
-            (data_sheet1["Checkpoint"].isin(selected_checkpoints))
-        ]
-
-        filtered_data_sheet1 = filtered_data_sheet1.drop(columns=[col for col in filtered_data_sheet1.columns if "Drop" in col])
-
-        if filtered_data_sheet1.empty:
-            st.warning("No data to generate PDFs for Sheet1.")
-        else:
-            # Call the process_pdfs function
-            pdfs = process_pdfs(months, year, filtered_data_sheet1, selected_checkpoints, custom_input)
-
-            if pdfs:
-                zip_data = generate_zip(pdfs, year)
-                st.download_button(
-                    label="Download All PDFs as ZIP",
-                    data=zip_data,
-                    file_name=f"checkpoint_reports_{year}.zip",
-                    mime="application/zip"
-                )
+        if not st.session_state.processing:
+            filtered_data_sheet1 = data_sheet1[
+                (data_sheet1["Sendezeitstempel"].dt.year == year) & 
+                (data_sheet1["Checkpoint"].isin(selected_checkpoints))
+            ]
+            
+            filtered_data_sheet1 = filtered_data_sheet1.drop(columns=[col for col in filtered_data_sheet1.columns if "Drop" in col])
+            
+            if filtered_data_sheet1.empty:
+                st.warning("No data to generate PDFs for Sheet1.")
             else:
-                st.warning("No data available for the selected months in Sheet1.")
+                st.session_state.processing = True
+                st.session_state.progress = 0
+                st.session_state.pdfs = None
+                
+                # Start background thread
+                thread = threading.Thread(
+                    target=generate_pdfs_background,
+                    args=(filtered_data_sheet1, months, year, selected_checkpoints, custom_input)
+                )
+                add_script_run_ctx(thread)
+                thread.daemon = True
+                thread.start()
+        else:
+            st.warning("PDF generation is already in progress!")
+
+    # Show progress and download outside the form
+    if st.session_state.processing:
+        st.progress(st.session_state.progress / 100)
+        st.info("Processing PDFs in background. Please wait...")
+        time.sleep(10)
+        st.rerun()
+    elif st.session_state.pdfs:
+        with st.container():
+            st.success("PDF generation completed successfully!")
+            zip_data = generate_zip(st.session_state.pdfs, year)
+            st.download_button(
+                label="Download All PDFs as ZIP",
+                data=zip_data,
+                file_name=f"checkpoint_reports_{year}.zip",
+                mime="application/zip"
+            )
 
 
 with tab3:
