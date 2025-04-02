@@ -153,10 +153,10 @@ def generate_zip(pdfs, year):
 st.title("Checkpoint Report Generator")
 
 # Load data for both sheets (Sheet0 and Sheet1)
-data_sheet0 = load_google_sheets_data(SHEET_NAME, CREDENTIALS_FILE)
+# data_sheet0 = load_google_sheets_data(SHEET_NAME, CREDENTIALS_FILE)
 data_sheet1 = load_second_sheet_data(SHEET_NAME, CREDENTIALS_FILE)
 
-data_sheet0 = convert_to_datetime(data_sheet0, 'Sendezeitstempel', '%d.%m.%Y %H:%M:%S')
+# data_sheet0 = convert_to_datetime(data_sheet0, 'Sendezeitstempel', '%d.%m.%Y %H:%M:%S')
 data_sheet1 = convert_to_datetime(data_sheet1, 'Sendezeitstempel', '%Y-%m-%d %H:%M:%S')
 # Load data for all three sheets
 data_sheet2 = load_third_sheet_data(SHEET_NAME, CREDENTIALS_FILE)
@@ -170,43 +170,43 @@ tab1, tab2, tab3 = st.tabs(["Sheet0 Report", "Sheet1 Report", "Sheet2 Report"])
 with tab1:
     st.header("Sheet0 Report")
     
-    # Create a form for Sheet0
-    with st.form(key="sheet0_form"):
-        months = st.multiselect("Select Months", options=range(1, 13), format_func=lambda x: f"{x:02d}")
-        year = st.selectbox("Select Year", options=sorted(data_sheet0["Sendezeitstempel"].dt.year.unique()))
-        selected_checkpoints = st.multiselect("Select Checkpoints", options=data_sheet0["Checkpoint-ID"].unique())
-        custom_input = st.text_input("Custom Input", value="")
+    # # Create a form for Sheet0
+    # with st.form(key="sheet0_form"):
+    #     months = st.multiselect("Select Months", options=range(1, 13), format_func=lambda x: f"{x:02d}")
+    #     year = st.selectbox("Select Year", options=sorted(data_sheet0["Sendezeitstempel"].dt.year.unique()))
+    #     selected_checkpoints = st.multiselect("Select Checkpoints", options=data_sheet0["Checkpoint-ID"].unique())
+    #     custom_input = st.text_input("Custom Input", value="")
         
-        submit_button = st.form_submit_button(label="Generate PDFs for Selected Months")
+    #     submit_button = st.form_submit_button(label="Generate PDFs for Selected Months")
         
-    # Process form submission
-    if submit_button:
-        filtered_data_sheet0 = data_sheet0[ 
-            (data_sheet0["Sendezeitstempel"].dt.year == year) & 
-            (data_sheet0["Checkpoint-ID"].isin(selected_checkpoints))
-        ]
+    # # Process form submission
+    # if submit_button:
+    #     filtered_data_sheet0 = data_sheet0[ 
+    #         (data_sheet0["Sendezeitstempel"].dt.year == year) & 
+    #         (data_sheet0["Checkpoint-ID"].isin(selected_checkpoints))
+    #     ]
         
-        if filtered_data_sheet0.empty:
-            st.warning("No data to generate PDFs for Sheet0.")
-        else:
-            pdfs = []
-            for month in months:
-                # Filter data for the specific month
-                month_data = filtered_data_sheet0[filtered_data_sheet0["Sendezeitstempel"].dt.month == month]
-                if not month_data.empty:
-                    pdf_data = generate_pdf(month_data, month, year, selected_checkpoints, custom_input)
-                    pdfs.append((month, pdf_data))
+    #     if filtered_data_sheet0.empty:
+    #         st.warning("No data to generate PDFs for Sheet0.")
+    #     else:
+    #         pdfs = []
+    #         for month in months:
+    #             # Filter data for the specific month
+    #             month_data = filtered_data_sheet0[filtered_data_sheet0["Sendezeitstempel"].dt.month == month]
+    #             if not month_data.empty:
+    #                 pdf_data = generate_pdf(month_data, month, year, selected_checkpoints, custom_input)
+    #                 pdfs.append((month, pdf_data))
 
-            if pdfs:
-                zip_data = generate_zip(pdfs, year)
-                st.download_button(
-                    label="Download All PDFs as ZIP",
-                    data=zip_data,
-                    file_name=f"checkpoint_reports_{year}.zip",
-                    mime="application/zip"
-                )
-            else:
-                st.warning("No data available for the selected months in Sheet0.")
+    #         if pdfs:
+    #             zip_data = generate_zip(pdfs, year)
+    #             st.download_button(
+    #                 label="Download All PDFs as ZIP",
+    #                 data=zip_data,
+    #                 file_name=f"checkpoint_reports_{year}.zip",
+    #                 mime="application/zip"
+    #             )
+    #         else:
+    #             st.warning("No data available for the selected months in Sheet0.")
 
 with tab2:
     st.header("Sheet1 Report (Bewachung)")
